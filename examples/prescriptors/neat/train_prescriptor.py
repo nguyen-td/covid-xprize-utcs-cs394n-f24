@@ -22,6 +22,8 @@ from utils import IP_MAX_VALUES
 from utils import get_predictions
 from utils import prepare_historical_df
 
+import os
+
 
 # Cutoff date for training data
 CUTOFF_DATE = '2020-07-31'
@@ -180,6 +182,7 @@ def eval_genomes(genomes, config):
 
 
 # Load configuration.
+os.chdir('examples/prescriptors/neat/')
 config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                      neat.DefaultSpeciesSet, neat.DefaultStagnation,
                      'config-prescriptor')
