@@ -182,7 +182,7 @@ def eval_genomes(genomes, config):
 
 
 # Load configuration.
-os.chdir('examples/prescriptors/neat/')
+# os.chdir('examples/prescriptors/neat/')
 config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                      neat.DefaultSpeciesSet, neat.DefaultStagnation,
                      'config-prescriptor')

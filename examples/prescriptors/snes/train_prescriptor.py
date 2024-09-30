@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from evotorch.algorithms import PGPE
+from evotorch.algorithms import SNES
 from evotorch.logging import PandasLogger
 from evotorch.neuroevolution import NEProblem
 from evotorch.logging import StdOutLogger
@@ -69,37 +69,9 @@ eval_end_date = pd.to_datetime(EVAL_END_DATE, format='%Y-%m-%d')
 
 # Set up Neuroevolution problem
 def fitness(network: torch.nn.Module):
-    return -(new_cases * stringency)
-
-covid_prescription = NEProblem(
-    objective_sense='max',
-    network=Network(num_inputs=NB_LOOKBACK_DAYS * 12 + NB_LOOKBACK_DAYS,  hidden_layers=[64], num_outputs=12),
-    network_eval_func=fitness,
-)
-
-searcher = PGPE(
-    covid_prescription,
-    popsize=50,
-    radius_init=2.25,
-    center_learning_rate=0.2,
-    stdev_learning_rate=0.1,
-)
-logger = PandasLogger(searcher)
-
-# Start loop
-df_dict = {'CountryName': [], 'RegionName': [], 'Date': []}
-for ip_col in IP_COLS:
-    df_dict[ip_col] = []
-
-# Set initial data
-eval_past_cases = deepcopy(past_cases)
-eval_past_ips = deepcopy(past_ips)
-
-# Make prescriptions one day at a time, feeding resulting
-# predictions from the predictor back into the prescriptor.
-for date in pd.date_range(eval_start_date, eval_end_date):
-    date_str = date.strftime("%Y-%m-%d")
-
+    """
+    Objective function to minimize. Is called by the Searcher below.
+    """
     # Prescribe for each geo
     for geo in eval_geos:
 
@@ -153,11 +125,47 @@ for date in pd.date_range(eval_start_date, eval_end_date):
         # Append predicted cases
         eval_past_cases[geo] = np.append(eval_past_cases[geo],
                                             geo_pred[PRED_CASES_COL].values[0])
-        
+            
     new_cases = pred_df[PRED_CASES_COL].mean().mean()
     stringency = pres_df[IP_COLS].mean().mean()
 
+    return -(new_cases * stringency)
+
+covid_prescription = NEProblem(
+    objective_sense='max',
+    network=Network(num_inputs=NB_LOOKBACK_DAYS * 12 + NB_LOOKBACK_DAYS,  hidden_layers=[64], num_outputs=12),
+    network_eval_func=fitness,
+)
+
+searcher = SNES(
+    covid_prescription,
+    popsize=10,
+    radius_init = 2.25,
+)
+logger = PandasLogger(searcher)
+
+# Start loop
+df_dict = {'CountryName': [], 'RegionName': [], 'Date': []}
+for ip_col in IP_COLS:
+    df_dict[ip_col] = []
+
+# Set initial data
+eval_past_cases = deepcopy(past_cases)
+eval_past_ips = deepcopy(past_ips)
+
+# Make prescriptions one day at a time, feeding resulting
+# predictions from the predictor back into the prescriptor.
+for date in pd.date_range(eval_start_date, eval_end_date):
+    date_str = date.strftime("%Y-%m-%d")
+
+    # Run prescriptor
     _ = StdOutLogger(searcher)
-    searcher.run(50)
-    # logger.to_dataframe().mean_eval.plot()
-    # plt.show()
+    searcher.run(10)
+    logger.to_dataframe().mean_eval.plot()
+
+# save model
+net = covid_prescription.parameterize_net(searcher.status['best'])
+torch.save(net.state_dict(), 'model.pt')
+
+plt.savefig('loss-NE.png', bbox_inches='tight')
+# plt.show()
